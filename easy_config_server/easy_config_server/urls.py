@@ -16,12 +16,20 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from mysite import views
+from spider import views as spiderView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("index",views.index),
     path("test_upload",views.test_upload),
     path("test_usemodel", views.usemodel),
+
+    # 爬虫任务列表
+    path('spider/taskJobList/', spiderView.taskJobList),
+    # 爬虫任务请求
+    path('spider/spiderRequest/', spiderView.spiderRequest),
+    # 爬虫资源查看
+    path('spider/itemList/', spiderView.itemList),
 
     #管理员
 

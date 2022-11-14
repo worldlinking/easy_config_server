@@ -38,7 +38,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     'corsheaders',
-    "mysite"
+    "mysite",
+    "spider"
 ]
 
 MIDDLEWARE = [
@@ -86,9 +87,9 @@ WSGI_APPLICATION = "easy_config_server.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        'NAME': 'easyconfiguration',
+        'NAME': 'cy',
         'USER': 'root',
-        'PASSWORD': '123456',
+        'PASSWORD': 'wjj010908',
         'HOST': '127.0.0.1',
         'PORT': '3306',
     }
