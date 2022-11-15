@@ -32,11 +32,24 @@ urlpatterns = [
     path('spider/itemList/', spiderView.itemList),
 
     #管理员
-
     #1 管理员上传标准模型
     path("uploadStandModel", views.uploadStandModel),
     #2 管理员上传模型权重
     path("uploadStandModelWeight", views.uploadStandModelWeight),
-    #3 使用标准模型的权重进行预测
-    path("useStandModelWeightImage", views.useStandModelWeightImage)
+    #3 使用标准模型的权重进行单图片预测
+    path("useStandModelWeightImage", views.useStandModelWeightImage),
+    #4 使用标准模型权重对zip压缩包内的所有文件进行预测
+    path("useStandModelWeightZip", views.useStandModelWeightZip),
+    #5 上传标准数据类型
+    path('uploadNewStandDataset',views.uploadNewStandDataset),
+
+    #用户
+    #1 获取特定类型的所有标准模型
+    path("getAllStandModelByType",views.getAllStandModelByType),
+    #2 获取某个标准模型对应的所有权重
+    path("getStandModelWeight",views.getStandModelWeight),
+    #3 创建数据集
+    path('createDataset',views.createDataset),
+    #4 向创建的数据集中导入数据
+    path('importData', views.importData)
 ]

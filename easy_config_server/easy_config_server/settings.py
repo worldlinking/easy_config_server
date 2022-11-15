@@ -87,10 +87,10 @@ WSGI_APPLICATION = "easy_config_server.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        'NAME': 'cy',
+        'NAME': 'easyconfiguration',
         'USER': 'root',
-        'PASSWORD': 'wjj010908',
-        'HOST': '127.0.0.1',
+        'PASSWORD': 'fanbibaizhou',
+        'HOST': '121.5.151.103',
         'PORT': '3306',
     }
 }
