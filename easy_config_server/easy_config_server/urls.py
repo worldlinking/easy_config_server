@@ -64,4 +64,8 @@ urlpatterns = [
     path('selectAllTrain',views.selectAllTrain),
     #10 查询所有的数据集
     path('selectAllDataset', views.selectAllDataset),
+    #11 查询所有的标准数据集
+    path('selectAllStandDataset',views.selectAllStandDataset),
+    #12 根据type查询对应的标准数据集
+    path('selectDataTypeById',views.selectDataTypeById)
 ]

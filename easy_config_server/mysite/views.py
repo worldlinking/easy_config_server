@@ -359,6 +359,8 @@ def importData(req):
                 user_dataset_path = 'mysite/datasets/user'+user_id
                 if not os.path.exists(user_dataset_path):
                     os.mkdir(user_dataset_path)
+                if os.path.exists(user_dataset_path + "/" + name):#已经导入过
+                    shutil.rmtree(user_dataset_path + "/" + name)
                 f = zipfile.ZipFile(dataset)
                 f.extractall(path=user_dataset_path + "/" + name)
 
@@ -552,9 +554,48 @@ def selectAllDataset(req):
     }
     try:
         user_id = req.GET.get('user_id')
-        datasets = DataSet.objects.filter(user_id=user_id)
+        datasets = DataSet.objects.filter(user_id=user_id).values("id", "label_num", "limit", "model", "model_type", "name", "path", "size", "standDataset", "total_num", "type", "user", "user_id","standDataset__data_type")
+        tempList = []
+        for dataset in datasets:
+            tempList.append(dataset)
+        reslut['data'] = tempList
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def selectAllStandDataset(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        datasets = StandDataset.objects.all()
         datasets = serializers.serialize("json",datasets)
         reslut['data'] = datasets
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def selectDataTypeById(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        standDataset_id = req.GET.get('standDataset_id')
+        sms = StandDataset.objects.filter(id=standDataset_id)
+        sms = serializers.serialize("json",sms)
+        reslut['data'] = sms
         return JsonResponse(reslut, safe=False, content_type='application/json')
 
     except Exception as e:

@@ -17,7 +17,7 @@ class StandDataset(models.Model):
 
 class DataSet(models.Model):
     name = models.CharField(max_length=255,unique=True)
-    type = models.SmallIntegerField()#数据集类型,0:测试，1:测试，2：验证,3:同时包含训练测试集
+    type = models.SmallIntegerField()#数据集类型,0:训练，1:测试，2：验证,3:同时包含训练测试集
     model_type = models.IntegerField(null=True,blank=True)#标识模型的种类,目标检测\实例分割
     path = models.CharField(max_length=255,null=True,blank=True)#存储路径
     size = models.FloatField(null=True,blank=True)#数据集大小/kb
@@ -67,4 +67,3 @@ class Model(models.Model):
     standModel = models.ForeignKey(StandModel,on_delete=models.CASCADE)
     class Meta:
         db_table = "model"
-
