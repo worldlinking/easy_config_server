@@ -1,3 +1,5 @@
+import signal
+
 import cv2
 from django.shortcuts import render,HttpResponse
 from django.http import JsonResponse
@@ -7,13 +9,18 @@ import torch
 from importlib import import_module
 from mysite.config import type_path_map
 from mysite.utils.writeFile import writeFile
+from mysite.utils.isMeetStru import isMeetStru
+from mysite.utils.getTotalAndLabelNum import getTotalAndLabelNum
+from mysite.utils.killProcTree import killProcTree
 import zipfile
 from django.core import serializers
-import cv2 as cv
-import skimage
 from mysite.utils.zipDirectory import zipDirectory
 import shutil
 import json
+import subprocess
+import psutil
+import errno
+
 
 # Create your views here.
 def index(request):
@@ -346,7 +353,7 @@ def importData(req):
                 name = DataSet.objects.filter(id=dataset_id).first().name
                 standDataset_id = DataSet.objects.filter(id=dataset_id).first().standDataset_id
                 type = DataSet.objects.filter(id=dataset_id).first().type
-                data_type = StandDataset.objects.filter(standDataset_id=standDataset_id).data_type
+                data_type = StandDataset.objects.filter(id=standDataset_id).first().data_type
 
                 #保存数据
                 user_dataset_path = 'mysite/datasets/user'+user_id
@@ -356,8 +363,17 @@ def importData(req):
                 f.extractall(path=user_dataset_path + "/" + name)
 
                 #判断数据集是否满足特定格式要求
-
-
+                isMeet = isMeetStru(data_type,type,dataset_path=user_dataset_path + "/" + name)
+                if not isMeet:
+                    shutil.rmtree(user_dataset_path + "/" + name)
+                    reslut["code"] = 500
+                    reslut["info"] = '文件不满足格式要求'
+                    return JsonResponse(reslut, safe=False, content_type='application/json')
+                #将信息写入数据库
+                size = dataset.size/1024
+                path = user_dataset_path + "/" + name
+                total_num,label_num = getTotalAndLabelNum(data_type,type,dataset_path=user_dataset_path + "/" + name)
+                DataSet.objects.filter(id=dataset_id).update(size=size,path=path,total_num=total_num,label_num=label_num)
                 return JsonResponse(reslut, safe=False, content_type='application/json')
             if formatType=='url':
                 pass
@@ -369,3 +385,180 @@ def importData(req):
             reslut["code"]=500
             reslut["info"] = 'failed'
             return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def trainModel(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        if req.method == 'POST':
+            data = json.loads(req.body)
+            model_id = data.get("model_id")
+            params = data.get("params")#用json字符串存起来的训练参数,eg:{"epoch":100}
+
+            #查询得到网络地址和数据集地址
+            model = Model.objects.filter(id=model_id).first()
+            user_id = model.user.id
+            dataset_path = model.dataSet.path
+            standmodel_path = model.standModel.net_path
+            standmodel_params = model.standModel.params
+            standmodel_params = json.loads(standmodel_params)
+            #获得训练参数
+            tempDict = {}
+            for param in standmodel_params:
+                pn = param.get('name')
+                tempDict[pn] = params.get(pn)
+            #拼接训练语句
+            if not os.path.exists("mysite/modelWeights/user"+str(user_id)):
+                os.makedirs("mysite/modelWeights/user"+str(user_id))
+            weight_path = "mysite/modelWeights/user"+str(user_id)+"/"+model.name
+            if not os.path.exists(weight_path):
+                os.makedirs(weight_path)
+            train_script = 'python {}/train.py --inputs {} --weight_save_path {}'.format(standmodel_path,dataset_path,weight_path)
+            for key in tempDict.keys():
+                train_script = train_script + ' --' + key +' '+str(tempDict.get(key))
+            proc=None
+            try:
+                proc = subprocess.Popen(train_script, shell=True)
+                repPro = Model.objects.filter(process = proc.pid)
+                while len(repPro) > 0:
+                    killProcTree(proc)
+                    proc = subprocess.Popen(train_script, shell=True)
+            except:
+                Model.objects.filter(id=model_id).update(process=proc.pid, weight=weight_path,
+                                                         params=json.dumps(tempDict), status=4)
+            Model.objects.filter(id=model_id).update(process=proc.pid,weight=weight_path,params=json.dumps(tempDict),status=1)
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def createModel(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        if req.method == 'POST':
+            data = json.loads(req.body)
+            name = data.get('name')
+            status = 0
+            limit = data.get('limit')
+            standModel_id = data.get('standModel_id')
+            user_id = data.get('user_id')
+
+            Model.objects.create(name=name,status=status,limit=limit,standModel_id=standModel_id,user_id=user_id)
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def datasetToModel(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        data = req.GET
+        model_id = data.get("model_id")
+        dataset_id = data.get("dataset_id")
+        Model.objects.filter(id=model_id).update(dataSet_id=dataset_id)
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def stopTrain(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+
+    try:
+        model_id = req.GET.get('model_id')
+        #获取pid
+        model = Model.objects.filter(id=model_id).first()
+        pid = model.process
+
+        #判断进程是否存在
+        if not psutil.pid_exists(pid):
+            reslut["code"] = 500
+            reslut["info"] = '已训练完成'
+            Model.objects.filter(id=model_id).update(status=2)
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+        #杀死进程树
+        try:
+            killProcTree(pid)
+        finally:
+            Model.objects.filter(id=model_id).update(status=3)#修改为训练终止状态
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def selectAllTrain(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        user_id = req.GET.get('user_id')
+        #先查询所有status=1(正在训练)的模型
+        models = Model.objects.filter(user_id=user_id,status=1)
+        #遍历这些models,获取pid
+        for model in models:
+            pid = model.process
+            model_id = model.id
+            #查询pid的状态,如果不存在，则更新状态
+            if not psutil.pid_exists(pid):
+                Model.objects.filter(id=model_id).update(status=2)
+            else:
+                p = psutil.Process(pid)
+                if p.cpu_percent(None) < 2: #CPU占用率小,说明不是训练进程
+                    Model.objects.filter(id=model_id).update(status=2)
+        #获取所有的model并返回
+        returnModels = Model.objects.filter(user_id=user_id)
+        returnModels = serializers.serialize("json",returnModels)
+        reslut['data'] = returnModels
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def selectAllDataset(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        user_id = req.GET.get('user_id')
+        datasets = DataSet.objects.filter(user_id=user_id)
+        datasets = serializers.serialize("json",datasets)
+        reslut['data'] = datasets
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')

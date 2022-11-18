@@ -5,7 +5,7 @@ def isMeetStru(data_type,type,dataset_path):
     :param data_type: 对应的标准数据集类型
     :param type: 0：训练集，1：测试集，2：验证机，3：训练集+测试集 4：训练集+测试集+验证集
     :param dataset_path:
-    :return:
+    :return:是否满足标准数据集要求
     """
     if data_type=='coco':
         hasAnn = os.path.exists(dataset_path+'/'+'annotations')
@@ -14,4 +14,9 @@ def isMeetStru(data_type,type,dataset_path):
         if not hasAnn or not hasLabels or not hasImages:
             return False
         if(type==0):
-            return True
+            hasImagesTrain2017 = os.path.exists(dataset_path+'/'+'images/train2017')
+            hasLabelsTrain2017 = os.path.exists(dataset_path+'/'+'labels/train2017')
+            if not hasImagesTrain2017 or not hasLabelsTrain2017:
+                return False
+            else:
+                return True

@@ -20,7 +20,7 @@ class DataSet(models.Model):
     type = models.SmallIntegerField()#数据集类型,0:测试，1:测试，2：验证,3:同时包含训练测试集
     model_type = models.IntegerField(null=True,blank=True)#标识模型的种类,目标检测\实例分割
     path = models.CharField(max_length=255,null=True,blank=True)#存储路径
-    size = models.IntegerField(null=True,blank=True)#数据集大小/kb
+    size = models.FloatField(null=True,blank=True)#数据集大小/kb
     format = models.CharField(max_length=64,null=True,blank=True)#格式
     total_num = models.IntegerField(null=True,blank=True)#总训练/验证/测试训练样本数目
     label_num = models.IntegerField(null=True,blank=True)#标注数目
@@ -56,14 +56,14 @@ class StandModelWeight(models.Model):
 
 class Model(models.Model):
     name = models.CharField(max_length=255,unique=True)
-    status = models.SmallIntegerField()#模型状态,0:未开始训练，1：训练中，2：训练完成
+    status = models.SmallIntegerField()#模型状态,0:未开始训练，1：训练中，2：训练完成,3:训练手动终止,4：训练出错
     process = models.BigIntegerField(null=True,blank=True) #模型对应的进程号
     weight = models.CharField(max_length=255,null=True,blank=True) #权重文件路径
     limit = models.SmallIntegerField(null=True,blank=True)#权限,0:公有,1:私有
-    params = models.CharField(max_length=255,null=True,blank=True)#训练参数
+    params = models.CharField(max_length=2000,null=True,blank=True)#训练参数
     #设置外键
     user = models.ForeignKey(User,on_delete=models.CASCADE)
-    dataSet = models.ForeignKey(DataSet,on_delete=models.CASCADE)
+    dataSet = models.ForeignKey(DataSet,on_delete=models.CASCADE,null=True,blank=True)
     standModel = models.ForeignKey(StandModel,on_delete=models.CASCADE)
     class Meta:
         db_table = "model"

@@ -51,5 +51,17 @@ urlpatterns = [
     #3 创建数据集
     path('createDataset',views.createDataset),
     #4 向创建的数据集中导入数据
-    path('importData', views.importData)
+    path('importData', views.importData),
+    #5 模型训练
+    path('trainModel', views.trainModel),
+    #6 模型创建
+    path('createModel',views.createModel),
+    #7 为模型指定数据集
+    path('datasetToModel',views.datasetToModel),
+    #8 终止训练
+    path('stopTrain',views.stopTrain),
+    #9 查询所有训练进程并更新所有进程状态
+    path('selectAllTrain',views.selectAllTrain),
+    #10 查询所有的数据集
+    path('selectAllDataset', views.selectAllDataset),
 ]
