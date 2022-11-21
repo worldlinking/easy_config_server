@@ -1,17 +1,14 @@
 from django.db import models
+from mysite.models import User
 
 
 # Create your models here.
 class Tasks(models.Model):
     # 爬虫任务表
     # taskId = models.IntegerField(verbose_name='爬虫任务id')
-    userId = models.CharField(verbose_name='用户id', max_length=32)
-    taskName = models.CharField(verbose_name='任务名称', max_length=32)
-    siteChoice = (
-        ('微博', "微博"),
-        ('twitter', "twitter"),
-    )
-    siteName = models.CharField(verbose_name='目标网站名称', choices=siteChoice, max_length=32)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    taskName = models.CharField(verbose_name='任务名称', max_length=32,unique=True)
+    siteName = models.CharField(verbose_name='目标网站名称',max_length=32)
     keyword = models.CharField(verbose_name='检索关键词', max_length=32)
     status = models.CharField(verbose_name='爬虫状态', max_length=10)
     startTime = models.CharField(verbose_name='开始时间', max_length=32)
@@ -52,4 +49,3 @@ class weibo(models.Model):
 
     class Meta:
         db_table = 'weibo'
-

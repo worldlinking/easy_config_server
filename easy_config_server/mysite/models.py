@@ -24,7 +24,7 @@ class DataSet(models.Model):
     format = models.CharField(max_length=64,null=True,blank=True)#格式
     total_num = models.IntegerField(null=True,blank=True)#总训练/验证/测试训练样本数目
     label_num = models.IntegerField(null=True,blank=True)#标注数目
-    limit = models.SmallIntegerField()#权限,0:公有,1:私有
+    limit = models.SmallIntegerField()#权限,0公有:,1:私有
     #设置外键
     user = models.ForeignKey(User,on_delete=models.CASCADE)
     standDataset = models.ForeignKey(StandDataset,on_delete=models.DO_NOTHING)

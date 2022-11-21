@@ -15,6 +15,8 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+
+from bert import bert_flood_prediction_service, bert_sentiment_prediction_service
 from mysite import views
 from spider import views as spiderView
 
@@ -30,6 +32,8 @@ urlpatterns = [
     path('spider/spiderRequest/', spiderView.spiderRequest),
     # 爬虫资源查看
     path('spider/itemList/', spiderView.itemList),
+    # 爬虫任务取消
+    path('spider/cancelJob/', spiderView.cancelJob),
 
     #管理员
     #1 管理员上传标准模型
@@ -38,10 +42,13 @@ urlpatterns = [
     path("uploadStandModelWeight", views.uploadStandModelWeight),
     #3 使用标准模型的权重进行单图片预测
     path("useStandModelWeightImage", views.useStandModelWeightImage),
+    #3 使用标准模型的权重进行单文本预测
+    path("useStandModelWeightText", views.useStandModelWeightText),
     #4 使用标准模型权重对zip压缩包内的所有文件进行预测
     path("useStandModelWeightZip", views.useStandModelWeightZip),
     #5 上传标准数据类型
     path('uploadNewStandDataset',views.uploadNewStandDataset),
+
 
     #用户
     #1 获取特定类型的所有标准模型
@@ -67,5 +74,7 @@ urlpatterns = [
     #11 查询所有的标准数据集
     path('selectAllStandDataset',views.selectAllStandDataset),
     #12 根据type查询对应的标准数据集
-    path('selectDataTypeById',views.selectDataTypeById)
+    path('selectDataTypeById',views.selectDataTypeById),
+    #13 查询所有的模型
+    path('selectAllModel',views.selectAllModel)
 ]

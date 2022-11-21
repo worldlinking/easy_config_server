@@ -20,7 +20,8 @@ def taskJobList(request):
         "data": []
     }
     try:
-        queryset = models.Tasks.objects.all()
+        user_id = request.GET.get('user_id')
+        queryset = models.Tasks.objects.filter(user_id=user_id)
         get_url = 'http://localhost:6800/listjobs.json?project=weibo'
         get_response = requests.get(get_url)
         get_json = get_response.json()
@@ -36,7 +37,8 @@ def taskJobList(request):
                         # now_ms = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
                         now_ms = datetime.datetime.now()
                         obj.status = 'running'
-                        obj.runtime = now_ms - datetime.datetime.strptime(obj.startTime, '%Y-%m-%d %H:%M:%S.%f')
+                        runtime = now_ms - datetime.datetime.strptime(obj.startTime, '%Y-%m-%d %H:%M:%S.%f')
+                        obj.runtime = str(runtime)
                         obj.save()
                         flag = True
                         break
@@ -47,9 +49,10 @@ def taskJobList(request):
                         obj.startTime = finishTask["start_time"]
                         obj.status = 'finished'
                         obj.endTime = finishTask["end_time"]
-                        obj.runtime = datetime.datetime.strptime(obj.endTime,
-                                                                 '%Y-%m-%d %H:%M:%S.%f') - datetime.datetime.strptime(
+                        runtime = datetime.datetime.strptime(obj.endTime,
+                                                             '%Y-%m-%d %H:%M:%S.%f') - datetime.datetime.strptime(
                             obj.startTime, '%Y-%m-%d %H:%M:%S.%f')
+                        obj.runtime = str(runtime)
                         obj.save()
                         break
         for obj in queryset:
@@ -78,7 +81,9 @@ def spiderRequest(request):
             keyword = post.get('keyword')
             startdate = post.get('startdate')
             enddate = post.get('enddate')
-            row_object = models.Tasks.objects.create(taskName=taskName, siteName=siteName, keyword=keyword)
+            user_id = post.get('user_id')
+            row_object = models.Tasks.objects.create(taskName=taskName, siteName=siteName, keyword=keyword,
+                                                     user_id=user_id)
             task_id = row_object.id
             post_url = 'http://127.0.0.1:6800/schedule.json'
             # if siteName == '微博':
@@ -135,6 +140,29 @@ def itemList(request):
                     content = getattr(obj, i)
                 data[i] = content
             result["data"].append(data)
+        return JsonResponse(result, safe=False, content_type='application/json')
+    except Exception as e:
+        result["code"] = 500
+        result["info"] = "failed,reason:" + e
+        return JsonResponse(result, safe=False, content_type='application/json')
+
+
+def cancelJob(request):
+    nid = int(request.GET.get('id'))
+    result = {
+        "code": 200,
+        "info": "success",
+    }
+    try:
+        row_object = models.Tasks.objects.filter(id=nid).first()
+        jobid = row_object.jobid
+        get_url = 'http://localhost:6800/cancel.json?'
+        data = {
+            'project': 'weibo',
+            'job': jobid,
+        }
+        get_response = requests.post(url=get_url, data=data)
+        print(get_response.json())
         return JsonResponse(result, safe=False, content_type='application/json')
     except Exception as e:
         result["code"] = 500

@@ -1,9 +1,9 @@
 import signal
 
 import cv2
-from django.shortcuts import render,HttpResponse
+from django.shortcuts import render, HttpResponse
 from django.http import JsonResponse
-from mysite.models import User,DataSet,Model,StandModel,StandModelWeight,StandDataset
+from mysite.models import User, DataSet, Model, StandModel, StandModelWeight, StandDataset
 import os
 import torch
 from importlib import import_module
@@ -192,7 +192,55 @@ def useStandModelWeightImage(req):
         if predict_file:
             os.remove(path+"/"+predict_file.name)
 
-#4 使用管理员上传的标准模型权重对文件压缩包进行预测
+
+# 3.2 使用管理员上传的标准模型权重对单个文本样本进行预测
+def useStandModelWeightText(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    predict_file = None
+    try:
+        post = req.POST
+        weight_id = post.get("weight_id")
+        content = post.get("content")
+        user_id = post.get("user_id")
+        predict_file = open('mysite/Temp/user' + user_id + '/sample.txt', 'w', encoding='utf-8')
+        predict_file.write(content)
+        predict_file.close()
+
+        # 获取预测权重的地址和网络结构的地址
+        smw = StandModelWeight.objects.filter(id=weight_id).first()
+        weight_path = smw.weight_path
+        dataset = smw.dataset
+        # 正查网络结构地址
+        net_path = StandModelWeight.objects.filter(id=weight_id).first().standModel.net_path
+
+        # 运行系统命令将预测结果保存成文件
+        # 判断是否有用户预测文件夹,如果没有则创建
+        user_path = "mysite/predict/user" + user_id
+
+        if not os.path.exists(user_path):
+            os.makedirs(user_path)
+        os.system("python {}/predict.py --input {} --ckpt {} --save_val_results_to {} --dataset {}".
+                  format(net_path, predict_file.name, weight_path, user_path, dataset))
+        file = open(user_path + "/" + os.path.basename(predict_file.name), "r", encoding='UTF-8')
+        res = file.read()
+        reslut['data'] = res.split()[0]
+        file.close()
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = "failed"
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    finally:
+        if predict_file:
+            os.remove(predict_file.name)
+
+
+# 4 使用管理员上传的标准模型权重对文件压缩包进行预测
 def useStandModelWeightZip(req):
     reslut = {
         "code": 200,
@@ -262,6 +310,8 @@ def useStandModelWeightZip(req):
         reslut["code"] = 500
         reslut["info"] = "failed"
         return JsonResponse(reslut, safe=False, content_type='application/json')
+
+
 def getAllStandModelByType(req):
     reslut = {
         "code": 200,
@@ -298,6 +348,8 @@ def getStandModelWeight(req):
         reslut["code"]=500
         reslut["info"] = 'failed'
         return JsonResponse(reslut, safe=False, content_type='application/json')
+
+
 def uploadNewStandDataset(req):
     reslut = {
         "code": 200,
@@ -596,6 +648,27 @@ def selectDataTypeById(req):
         sms = StandDataset.objects.filter(id=standDataset_id)
         sms = serializers.serialize("json",sms)
         reslut['data'] = sms
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def selectAllModel(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        user_id = req.GET.get('user_id')
+        models = Model.objects.filter(user_id=user_id).values("id", "name", "status", "process", "weight", "limit", "params", "dataSet", "standModel", "standModel__name", "standModel__type")
+        tempList = []
+        for model in models:
+            tempList.append(model)
+        reslut['data'] = tempList
         return JsonResponse(reslut, safe=False, content_type='application/json')
 
     except Exception as e:

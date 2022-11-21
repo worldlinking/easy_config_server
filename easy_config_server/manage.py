@@ -11,6 +11,26 @@ from watchdog.events import LoggingEventHandler
 import time
 import logging
 
+# BERT model construction
+from torch import nn
+
+
+class BertClassifier(nn.Module):
+    def __init__(self, bert_model):
+        super(BertClassifier, self).__init__()
+        self.bert = bert_model
+        self.linear1 = nn.Linear(768, 128)
+        self.linear2 = nn.Linear(64, 2)
+        self.activation = nn.ReLU()
+
+    def forward(self, x, mask_attn):
+        outputs = self.bert(input_ids=x, attention_mask=mask_attn)
+        output = outputs[0][:, 0, :]
+        res = self.linear1(output)
+        res = self.activation(res)
+        res = self.linear2(res)
+        return res
+
 
 def main():
     """Run administrative tasks."""
@@ -24,6 +44,7 @@ def main():
             "forget to activate a virtual environment?"
         ) from exc
     execute_from_command_line(sys.argv)
+
 
 if __name__ == "__main__":
     main()
