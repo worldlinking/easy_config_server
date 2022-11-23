@@ -34,7 +34,7 @@ class DataSet(models.Model):
 
 class StandModel(models.Model):
     name=models.CharField(max_length=255,unique=True)
-    params = models.CharField(max_length=255)
+    params = models.CharField(max_length=2000)
     net_path = models.CharField(max_length=255)#网络结构和初始化函数
     type = models.IntegerField()#标识模型的种类,目标检测\实例分割
     info = models.CharField(max_length=255,null=True,blank=True)#模型的其他信息
@@ -61,6 +61,7 @@ class Model(models.Model):
     weight = models.CharField(max_length=255,null=True,blank=True) #权重文件路径
     limit = models.SmallIntegerField(null=True,blank=True)#权限,0:公有,1:私有
     params = models.CharField(max_length=2000,null=True,blank=True)#训练参数
+    train_time = models.CharField(max_length=100,null=True,blank=True)#存储模型开始训练的时间
     #设置外键
     user = models.ForeignKey(User,on_delete=models.CASCADE)
     dataSet = models.ForeignKey(DataSet,on_delete=models.CASCADE,null=True,blank=True)

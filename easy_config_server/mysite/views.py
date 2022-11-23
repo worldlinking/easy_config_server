@@ -20,6 +20,8 @@ import json
 import subprocess
 import psutil
 import errno
+import time
+
 
 
 # Create your views here.
@@ -483,7 +485,13 @@ def trainModel(req):
             except:
                 Model.objects.filter(id=model_id).update(process=proc.pid, weight=weight_path,
                                                          params=json.dumps(tempDict), status=4)
-            Model.objects.filter(id=model_id).update(process=proc.pid,weight=weight_path,params=json.dumps(tempDict),status=1)
+            #获取进程的创建时间
+            p = psutil.Process(proc.pid)
+            atime = p.create_time()
+            timeArray = time.localtime(atime)
+            otherStyleTime = time.strftime("%Y-%m-%d %H:%M:%S", timeArray)
+
+            Model.objects.filter(id=model_id).update(process=proc.pid,weight=weight_path,params=json.dumps(tempDict),status=1,train_time=otherStyleTime)
             return JsonResponse(reslut, safe=False, content_type='application/json')
     except Exception as e:
         print(e)
@@ -664,11 +672,53 @@ def selectAllModel(req):
     }
     try:
         user_id = req.GET.get('user_id')
-        models = Model.objects.filter(user_id=user_id).values("id", "name", "status", "process", "weight", "limit", "params", "dataSet", "standModel", "standModel__name", "standModel__type")
+        #先查询所有status=1(正在训练)的模型
+        models = Model.objects.filter(user_id=user_id,status=1)
+        #遍历这些models,获取pid
+        for model in models:
+            pid = model.process
+            model_id = model.id
+            #查询pid的状态,如果不存在，则更新状态
+            if not psutil.pid_exists(pid):
+                print(psutil.pid_exists(pid))
+                Model.objects.filter(id=model_id).update(status=2)
+            else:
+                # 获取进程的创建时间
+                p = psutil.Process(pid)
+                atime = p.create_time()
+                timeArray = time.localtime(atime)
+                otherStyleTime = time.strftime("%Y-%m-%d %H:%M:%S", timeArray)
+                train_time = model.train_time
+                print(train_time,otherStyleTime)
+                if train_time != otherStyleTime:
+                    Model.objects.filter(id=model_id).update(status=2)
+
+        models = Model.objects.filter(user_id=user_id).values("id", "name", "status", "process", "weight", "limit", "params", "dataSet", "standModel", "standModel__params","standModel__name", "standModel__type","dataSet__id","dataSet__name")
         tempList = []
         for model in models:
             tempList.append(model)
         reslut['data'] = tempList
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def deleteDataset(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        dataset_id = req.GET.get('dataset_id')
+        dataset = DataSet.objects.get(id=dataset_id)
+        path = dataset.path
+        num,_ = dataset.delete()
+        if num != 0 and path!='0' and path:
+            shutil.rmtree(path)
         return JsonResponse(reslut, safe=False, content_type='application/json')
 
     except Exception as e:

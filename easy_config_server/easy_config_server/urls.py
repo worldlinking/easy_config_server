@@ -16,7 +16,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
-from bert import bert_flood_prediction_service, bert_sentiment_prediction_service
+# from bert import bert_flood_prediction_service, bert_sentiment_prediction_service
 from mysite import views
 from spider import views as spiderView
 
@@ -76,5 +76,7 @@ urlpatterns = [
     #12 根据type查询对应的标准数据集
     path('selectDataTypeById',views.selectDataTypeById),
     #13 查询所有的模型
-    path('selectAllModel',views.selectAllModel)
+    path('selectAllModel',views.selectAllModel),
+    #14 删除数据集
+    path('deleteDataset', views.deleteDataset)
 ]
