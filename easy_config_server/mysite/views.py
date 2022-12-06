@@ -21,6 +21,9 @@ import subprocess
 import psutil
 import errno
 import time
+from django.db.models import Q
+import urllib
+import requests
 
 
 
@@ -159,6 +162,7 @@ def useStandModelWeightImage(req):
     }
     path=""
     predict_file=None
+    path1 = os.path.abspath('.')
     try:
         post = req.POST
         weight_id = post.get("weight_id")
@@ -182,7 +186,7 @@ def useStandModelWeightImage(req):
         if not os.path.exists(user_path):
             os.makedirs(user_path)
         os.system("python {}/predict.py --input {} --ckpt {} --save_val_results_to {} --dataset {}".
-                  format(net_path,path+"/"+predict_file.name,weight_path,user_path,dataset))
+                  format(net_path,path1+'/'+path+"/"+predict_file.name,path1+'/'+weight_path,path1+'/'+user_path,dataset))
         reslut['data'] = "user"+user_id+"/"+os.path.splitext(predict_file.name)[0]#返回预测结果文件路径
         return JsonResponse(reslut, safe=False, content_type='application/json')
     except Exception as e:
@@ -253,6 +257,7 @@ def useStandModelWeightZip(req):
     zipTempPath=""
     predictTempPath=""
     predict_file=None
+    path1 = os.path.abspath('.')
     try:
         post = req.POST
         weight_id = post.get("weight_id")
@@ -297,7 +302,7 @@ def useStandModelWeightZip(req):
         for file in  os.listdir(zipTempPath):
             file_path = os.path.join(zipTempPath, file)
             os.system("python {}/predict.py --input {} --ckpt {} --save_val_results_to {} --dataset {}".
-                      format(net_path, file_path, weight_path, predictTempPath, dataset))
+                      format(net_path, path1+'/'+file_path, path1+'/'+weight_path, path1+'/'+predictTempPath, dataset))
 
         #将预测结果保存为zip文件
         zipDirectory(predictTempPath)
@@ -419,6 +424,7 @@ def importData(req):
                 f.extractall(path=user_dataset_path + "/" + name)
 
                 #判断数据集是否满足特定格式要求
+                isMeet = False
                 isMeet = isMeetStru(data_type,type,dataset_path=user_dataset_path + "/" + name)
                 if not isMeet:
                     shutil.rmtree(user_dataset_path + "/" + name)
@@ -431,8 +437,6 @@ def importData(req):
                 total_num,label_num = getTotalAndLabelNum(data_type,type,dataset_path=user_dataset_path + "/" + name)
                 DataSet.objects.filter(id=dataset_id).update(size=size,path=path,total_num=total_num,label_num=label_num)
                 return JsonResponse(reslut, safe=False, content_type='application/json')
-            if formatType=='url':
-                pass
             reslut["code"] = 500
             reslut["info"] = 'formatType未知'
             return JsonResponse(reslut, safe=False, content_type='application/json')
@@ -454,10 +458,12 @@ def trainModel(req):
             model_id = data.get("model_id")
             params = data.get("params")#用json字符串存起来的训练参数,eg:{"epoch":100}
 
+            path1 = os.path.abspath('.')
+
             #查询得到网络地址和数据集地址
             model = Model.objects.filter(id=model_id).first()
             user_id = model.user.id
-            dataset_path = model.dataSet.path
+            dataset_path = path1+"/"+model.dataSet.path
             standmodel_path = model.standModel.net_path
             standmodel_params = model.standModel.params
             standmodel_params = json.loads(standmodel_params)
@@ -469,10 +475,21 @@ def trainModel(req):
             #拼接训练语句
             if not os.path.exists("mysite/modelWeights/user"+str(user_id)):
                 os.makedirs("mysite/modelWeights/user"+str(user_id))
-            weight_path = "mysite/modelWeights/user"+str(user_id)+"/"+model.name
+            if not os.path.exists("mysite/modelLogs/user" + str(user_id)):
+                os.makedirs("mysite/modelLogs/user" + str(user_id))
+            weight_path = path1+"/mysite/modelWeights/user"+str(user_id)+"/"+model.name
+            log_path = path1+"/mysite/modelLogs/user"+str(user_id)+"/"+model.name
             if not os.path.exists(weight_path):
                 os.makedirs(weight_path)
-            train_script = 'python {}/train.py --inputs {} --weight_save_path {}'.format(standmodel_path,dataset_path,weight_path)
+            # if os.path.exists(log_path):
+            #     shutil.rmtree(log_path)
+            if os.path.exists(log_path):
+                shutil.rmtree(log_path)
+                os.makedirs(log_path)
+            if not os.path.exists(log_path):
+                os.makedirs(log_path)
+
+            train_script = 'python {}/train.py --inputs {} --weight_save_path {} --loss_save_path {}'.format(standmodel_path,dataset_path,weight_path,log_path)
             for key in tempDict.keys():
                 train_script = train_script + ' --' + key +' '+str(tempDict.get(key))
             proc=None
@@ -491,7 +508,7 @@ def trainModel(req):
             timeArray = time.localtime(atime)
             otherStyleTime = time.strftime("%Y-%m-%d %H:%M:%S", timeArray)
 
-            Model.objects.filter(id=model_id).update(process=proc.pid,weight=weight_path,params=json.dumps(tempDict),status=1,train_time=otherStyleTime)
+            Model.objects.filter(id=model_id).update(process=proc.pid,weight=weight_path,params=json.dumps(tempDict),status=1,train_time=otherStyleTime,loss=log_path)
             return JsonResponse(reslut, safe=False, content_type='application/json')
     except Exception as e:
         print(e)
@@ -614,7 +631,7 @@ def selectAllDataset(req):
     }
     try:
         user_id = req.GET.get('user_id')
-        datasets = DataSet.objects.filter(user_id=user_id).values("id", "label_num", "limit", "model", "model_type", "name", "path", "size", "standDataset", "total_num", "type", "user", "user_id","standDataset__data_type")
+        datasets = DataSet.objects.filter(user_id=user_id).values("id", "label_num", "limit", "model_type", "name", "path", "size", "total_num", "type", "user_id","standDataset__data_type")
         tempList = []
         for dataset in datasets:
             tempList.append(dataset)
@@ -680,7 +697,6 @@ def selectAllModel(req):
             model_id = model.id
             #查询pid的状态,如果不存在，则更新状态
             if not psutil.pid_exists(pid):
-                print(psutil.pid_exists(pid))
                 Model.objects.filter(id=model_id).update(status=2)
             else:
                 # 获取进程的创建时间
@@ -689,7 +705,6 @@ def selectAllModel(req):
                 timeArray = time.localtime(atime)
                 otherStyleTime = time.strftime("%Y-%m-%d %H:%M:%S", timeArray)
                 train_time = model.train_time
-                print(train_time,otherStyleTime)
                 if train_time != otherStyleTime:
                     Model.objects.filter(id=model_id).update(status=2)
 
@@ -719,6 +734,340 @@ def deleteDataset(req):
         num,_ = dataset.delete()
         if num != 0 and path!='0' and path:
             shutil.rmtree(path)
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')\
+
+def selectConnectDataset(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        user_id = req.GET.get('user_id')
+        model_type = req.GET.get('model_type')
+
+        datasets = DataSet.objects.filter((Q(user_id=user_id) | Q(limit=0)) & Q(model_type=model_type) & (Q(type=0) | Q(type=3) | Q(type=4)))
+        reslut['data'] = serializers.serialize("json",datasets)
+        # reslut['data'] = list(datasets)
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getWeightName(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        model_id = req.GET.get('model_id')
+        weight_path = Model.objects.get(id=model_id).weight
+
+        #遍历weight_path下的文件
+        weight_name_arr = []
+        for name in os.listdir(weight_path):
+            hz = os.path.splitext(name)[-1][1:]
+            if  hz== "pt" or hz == 'pth' or hz == 'pkl':
+                weight_name_arr.append(name)
+        reslut['data'] = weight_name_arr
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def useTrainedModelToPredictImage(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    path=""
+    predict_file=None
+    if req.method == 'POST':
+        try:
+            post = req.POST
+            user_id = post.get('user_id')
+            model_id = post.get('model_id')
+            predict_file = req.FILES.get("predict_file", None)
+            weight_name = post.get('weight_name')
+
+            # 将用户上传图片保存成文件
+            path = 'mysite/Temp/user' + user_id
+            writeFile(predict_file, path, predict_file.name)
+
+            # 获取预测权重的地址和网络结构的地址
+            model = Model.objects.filter(id=model_id).first()
+            weight_path = model.weight + '/' +  weight_name
+            net_path = model.standModel.net_path
+
+            dataset = DataSet.objects.filter(id=model.dataSet_id).first().standDataset.data_type
+            # 运行系统命令将预测结果保存成文件
+            # 判断是否有用户预测文件夹,如果没有则创建
+            user_path = "mysite/predict/user" + user_id
+            if not os.path.exists(user_path):
+                os.makedirs(user_path)
+            os.system("python {}/predict.py --input {} --ckpt {} --save_val_results_to {} --dataset {}".
+                      format(net_path, path + "/" + predict_file.name, weight_path, user_path, dataset))
+            reslut['data'] = "user" + user_id + "/" + os.path.splitext(predict_file.name)[0]  # 返回预测结果文件路径
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+        except Exception as e:
+            print(e)
+            reslut["code"] = 500
+            reslut["info"] = 'failed'
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+        finally:
+            if predict_file:
+                os.remove(path + "/" + predict_file.name)
+    else:
+        reslut["code"] = 500
+        reslut["info"] = '请求方法有误'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def useTrainedModelToPredictZip(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    path = ""
+    zipTempPath = ""
+    predictTempPath = ""
+    predict_file = None
+    if req.method == 'POST':
+        try:
+            post = req.POST
+            model_id = post.get("model_id")
+            weight_name = post.get("weight_name")
+            predict_file = req.FILES.get("predict_zip", None)
+            user_id = post.get("user_id")
+            # 获取文件后缀
+            suffix = os.path.splitext(predict_file.name)[-1]
+            if suffix != '.zip':
+                reslut['code'] = 500
+                reslut['info'] = "请求方法有误"
+                return JsonResponse(reslut, safe=False, content_type='application/json')
+            # 解压缩文件进指定文件夹
+            f = zipfile.ZipFile(predict_file)
+            zipTempPath = 'mysite/Temp/user' + user_id
+            if not os.path.exists(zipTempPath):
+                os.makedirs(zipTempPath)
+            zipTempPath = 'mysite/Temp/user' + user_id + "/" + os.path.splitext(predict_file.name)[0]
+            f.extractall(path=zipTempPath)
+
+            model = Model.objects.filter(id=model_id).first()
+            weight_path = model.weight + '/' + weight_name
+            net_path = model.standModel.net_path
+            dataset = DataSet.objects.filter(id=model.dataSet_id).first().standDataset.data_type
+            user_path = "mysite/predict/user" + user_id
+            if not os.path.exists(user_path):
+                os.makedirs(user_path)
+
+            predictTempPath = user_path + "/" + os.path.splitext(predict_file.name)[0]
+            # 在用户预测文件夹下创建压缩包同名文件夹
+            if not os.path.exists(predictTempPath):
+                os.makedirs(predictTempPath)
+
+            # 遍历所有的样本,进行批量预测
+            for file in os.listdir(zipTempPath):
+                file_path = os.path.join(zipTempPath, file)
+                print("python {}/predict.py --input {} --ckpt {} --save_val_results_to {} --dataset {}".
+                          format(net_path, file_path, weight_path, predictTempPath, dataset))
+                os.system("python {}/predict.py --input {} --ckpt {} --save_val_results_to {} --dataset {}".
+                          format(net_path, file_path, weight_path, predictTempPath, dataset))
+
+            # 将预测结果保存为zip文件
+            zipDirectory(predictTempPath)
+            # 删除预测文件夹
+            shutil.rmtree(predictTempPath)
+            # 删除临时上传文件
+            shutil.rmtree(zipTempPath)
+            reslut['data'] = "user" + user_id + "/" + os.path.splitext(predict_file.name)[0] + ".zip"
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+        except Exception as e:
+            print(e)
+            reslut["code"] = 500
+            reslut["info"] = 'failed'
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+    else:
+        reslut["code"] = 500
+        reslut["info"] = '请求方法有误'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getAllPubicModel(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        model_type = req.GET.get('model_type')
+        user_id = req.GET.get('user_id')
+        models = Model.objects.filter(Q(standModel__type=model_type) & ~Q(user_id=user_id) & Q(limit=0))
+        models = serializers.serialize('json',models)
+        reslut['data'] = models
+
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def importDataFromUrl(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        post = json.loads(req.body)
+        user_id = post.get("user_id")
+        dataset_id = post.get("dataset_id")
+        url = post.get("url")
+        format = post.get("format")
+        zip_save_path = ''
+
+        if format == 'zip':
+            # 获取对应的数据集信息
+            name = DataSet.objects.filter(id=dataset_id).first().name
+            standDataset_id = DataSet.objects.filter(id=dataset_id).first().standDataset_id
+            type = DataSet.objects.filter(id=dataset_id).first().type
+            data_type = StandDataset.objects.filter(id=standDataset_id).first().data_type
+
+            user_dataset_path = 'mysite/datasets/user' + str(user_id)
+            if not os.path.exists(user_dataset_path):
+                os.mkdir(user_dataset_path)
+            if os.path.exists(user_dataset_path + "/" + name):  # 已经导入过
+                shutil.rmtree(user_dataset_path + "/" + name)
+            # 引用 requests文件
+            import requests
+            # 把下载地址发送给requests模块
+            f = requests.get(url)
+            # 下载文件
+            zip_save_path = user_dataset_path + '/' + name + '.'+format
+            with open(user_dataset_path + '/' + name + '.'+format, "wb") as code:
+                code.write(f.content)
+                code.close()
+            f = zipfile.ZipFile(zip_save_path)
+            f.extractall(path=user_dataset_path + "/" + name)
+            f.close()
+
+            length = len(os.listdir(user_dataset_path + "/" + name))
+            dataset_path = user_dataset_path + "/" + name
+            if length == 1:
+                dataset_path=user_dataset_path + "/" + name + os.listdir(user_dataset_path + "/" + name)[0]
+            # 判断数据集是否满足特定格式要求
+            isMeet = False
+            isMeet = isMeetStru(data_type, type, dataset_path=dataset_path)
+            if not isMeet:
+                shutil.rmtree(user_dataset_path + "/" + name)
+                reslut["code"] = 500
+                reslut["info"] = '文件不满足格式要求'
+                return JsonResponse(reslut, safe=False, content_type='application/json')
+
+            size = os.path.getsize(zip_save_path)
+            path = user_dataset_path + "/" + name
+            total_num, label_num = getTotalAndLabelNum(data_type, type, dataset_path=dataset_path)
+            DataSet.objects.filter(id=dataset_id).update(size=size, path=path, total_num=total_num, label_num=label_num)
+            if os.path.exists(zip_save_path):
+                os.remove(zip_save_path)
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getLossData(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        user_id = req.GET.get("user_id")
+        type = req.GET.get("model_type")
+
+        lossArr = Model.objects.filter(Q(user_id=user_id) & ~Q(status=0) & Q(standModel__type=type)).values("id","loss")
+        tempArr = {}
+        for aLoss in lossArr:
+            #解析txt文件
+            names = os.listdir(aLoss["loss"])
+            if not len(names) > 0:
+                tempArr[aLoss['id']] = []
+                break
+            f = open(aLoss["loss"]+"/"+names[0])
+            lines = f.readlines()
+            f.close()
+            data = []
+            for line in lines:
+                data.append(float(line.strip()))
+            tempArr[aLoss['id']]=data
+        reslut['data'] = tempArr
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def deleteModel(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        user_id = req.GET.get('user_id')
+        model_id = req.GET.get('model_id')
+
+        model = Model.objects.filter(id=model_id).first()
+        pid = model.process
+
+        #判断模型的状态
+        if model.status == 1:#模型正在训练，需要先终止训练
+            # 判断进程是否存在
+            if psutil.pid_exists(pid):
+                # 杀死进程树
+                try:
+                    killProcTree(pid)
+                finally:
+                    # 删除模型的文件
+                    weight_path = "mysite/modelWeights/user" + str(user_id) + "/" + model.name
+                    log_path = "mysite/modelLogs/user" + str(user_id) + "/" + model.name
+                    if os.path.exists(weight_path):
+                        shutil.rmtree(weight_path)
+                    if os.path.exists(log_path):
+                        shutil.rmtree(log_path)
+                    # 从数据库中移除改项
+                    model.delete()
+                    return JsonResponse(reslut, safe=False, content_type='application/json')
+        # 删除模型的文件
+        weight_path = "mysite/modelWeights/user" + str(user_id) + "/" + model.name
+        log_path = "mysite/modelLogs/user" + str(user_id) + "/" + model.name
+        if os.path.exists(weight_path):
+            shutil.rmtree(weight_path)
+        if os.path.exists(log_path):
+            shutil.rmtree(log_path)
+        # 从数据库中移除改项
+        model.delete()
         return JsonResponse(reslut, safe=False, content_type='application/json')
 
     except Exception as e:

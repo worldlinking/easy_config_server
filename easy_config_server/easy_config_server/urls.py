@@ -78,5 +78,20 @@ urlpatterns = [
     #13 查询所有的模型
     path('selectAllModel',views.selectAllModel),
     #14 删除数据集
-    path('deleteDataset', views.deleteDataset)
+    path('deleteDataset', views.deleteDataset),
+    #15 查找用户的和公开的数据集
+    path('selectConnectDataset',views.selectConnectDataset),
+    #16 获取训练好的模型的权重文件名
+    path('getWeightName', views.getWeightName),
+    #17 使用用户训练好的模型进行预测
+    path('useTrainedModelToPredictImage',views.useTrainedModelToPredictImage),
+    path('useTrainedModelToPredictZip',views.useTrainedModelToPredictZip),
+    #18 获得所有的公共模型
+    path('getAllPubicModel',views.getAllPubicModel),
+    #19 从url下载数据集
+    path("importDataFromUrl",views.importDataFromUrl),
+    #20 获取所有模型的loss
+    path("getLossData", views.getLossData),
+    #删除模型
+    path('deleteModel',views.deleteModel)
 ]

@@ -59,6 +59,7 @@ class Model(models.Model):
     status = models.SmallIntegerField()#模型状态,0:未开始训练，1：训练中，2：训练完成,3:训练手动终止,4：训练出错
     process = models.BigIntegerField(null=True,blank=True) #模型对应的进程号
     weight = models.CharField(max_length=255,null=True,blank=True) #权重文件路径
+    loss = models.CharField(max_length=255,null=True,blank=True) #loss文件存储路径
     limit = models.SmallIntegerField(null=True,blank=True)#权限,0:公有,1:私有
     params = models.CharField(max_length=2000,null=True,blank=True)#训练参数
     train_time = models.CharField(max_length=100,null=True,blank=True)#存储模型开始训练的时间
