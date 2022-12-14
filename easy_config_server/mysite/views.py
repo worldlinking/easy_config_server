@@ -8,6 +8,7 @@ import os
 import torch
 from importlib import import_module
 from mysite.config import type_path_map
+from mysite.config import modelsName
 from mysite.utils.writeFile import writeFile
 from mysite.utils.isMeetStru import isMeetStru
 from mysite.utils.getTotalAndLabelNum import getTotalAndLabelNum
@@ -1070,6 +1071,78 @@ def deleteModel(req):
         model.delete()
         return JsonResponse(reslut, safe=False, content_type='application/json')
 
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getAllModelName(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        reslut['data'] = modelsName
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getAllStandModelById(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        admin_id = req.GET.get('admin_id')
+        sms = StandModel.objects.filter(user_id = admin_id)
+        sms = serializers.serialize('json',sms)
+        sms = json.loads(sms)
+        reslut['data'] = sms
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getStandModelWeightById(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        standmodel_id = req.GET.get('standmodel_id')
+        smsw = StandModelWeight.objects.filter(standModel__id = standmodel_id)
+        smsw = json.loads(serializers.serialize('json',smsw))
+        reslut['data'] = smsw
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+def deleteStandModelWeightById(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        weight_id = req.GET.get('weight_id')
+        weight_path = StandModelWeight.objects.filter(id=weight_id).first().weight_path
+        #删除权重
+        os.remove(weight_path)
+        StandModelWeight.objects.filter(id=weight_id).delete()
+        return JsonResponse(reslut, safe=False, content_type='application/json')
     except Exception as e:
         print(e)
         reslut["code"] = 500

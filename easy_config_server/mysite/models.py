@@ -69,3 +69,4 @@ class Model(models.Model):
     standModel = models.ForeignKey(StandModel,on_delete=models.CASCADE)
     class Meta:
         db_table = "model"
+

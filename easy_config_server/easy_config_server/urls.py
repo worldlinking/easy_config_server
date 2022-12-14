@@ -48,7 +48,16 @@ urlpatterns = [
     path("useStandModelWeightZip", views.useStandModelWeightZip),
     #5 上传标准数据类型
     path('uploadNewStandDataset',views.uploadNewStandDataset),
-
+    #6获得所有模型名称
+    path('getAllModelName',views.getAllModelName),
+    #7 获得标准模型列表
+    path('getAllStandModelById',views.getAllStandModelById),
+    #8 获得某个标准模型的所有管理员权重信息
+    path('getStandModelWeightById', views.getStandModelWeightById),
+    #9 删除某一个标准模型权重
+    path('deleteStandModelWeightById', views.deleteStandModelWeightById),
+    #10 获得属于某个管理员的所有标准模型
+    path('getAllStandModelById',views.getAllStandModelById),
 
     #用户
     #1 获取特定类型的所有标准模型
@@ -92,6 +101,6 @@ urlpatterns = [
     path("importDataFromUrl",views.importDataFromUrl),
     #20 获取所有模型的loss
     path("getLossData", views.getLossData),
-    #删除模型
-    path('deleteModel',views.deleteModel)
+    #21删除模型
+    path('deleteModel',views.deleteModel),
 ]
