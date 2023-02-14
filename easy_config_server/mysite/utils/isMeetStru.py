@@ -16,6 +16,7 @@ def isMeetStru(data_type,type,dataset_path):
         if(type==0):
             hasImagesTrain2017 = os.path.exists(dataset_path+'/'+'images/train2017')
             hasLabelsTrain2017 = os.path.exists(dataset_path+'/'+'labels/train2017')
+
             if not hasImagesTrain2017 or not hasLabelsTrain2017:
                 return False
             else:
@@ -35,3 +36,5 @@ def isMeetStru(data_type,type,dataset_path):
             return False
         if type == 0:
             return os.path.exists(dataset_path + '/' + 'Jsons/train_annotations.json') and os.path.exists(dataset_path + '/' + 'Jsons/val_annotations.json')
+    else:
+        return True

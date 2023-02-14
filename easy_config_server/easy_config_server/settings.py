@@ -135,3 +135,10 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ORIGIN_ALLOW_ALL = True
 #允许所有的请求头
 CORS_ALLOW_HEADERS = ('*')
+
+EMAIL_HOST = 'smtp.qq.com'
+EMAIL_PORT = 25
+EMAIL_HOST_USER = '2449471714@qq.com' # 你的 QQ 账号
+EMAIL_HOST_PASSWORD = 'bnueeseyjvkndibh'
+EMAIL_USE_TLS = True # 这里必须是 True，否则发送不成功
+EMAIL_FROM = '2449471714@qq.com' # 你的 QQ 账号

@@ -56,8 +56,32 @@ urlpatterns = [
     path('getStandModelWeightById', views.getStandModelWeightById),
     #9 删除某一个标准模型权重
     path('deleteStandModelWeightById', views.deleteStandModelWeightById),
-    #10 获得属于某个管理员的所有标准模型
-    path('getAllStandModelById',views.getAllStandModelById),
+    #10更新标准模型信息
+    path('updateStandModel',views.updateStandModel),
+    #11 删除标准模型
+    path('deleteStandModel',views.deleteStandModel),
+    #12 获得所有的标准数据集
+    path('getAllStandDataSet',views.getAllStandDataSet),
+    #13 上传公开数据集
+    path('uploadPublicDataset', views.uploadPublicDataset),
+    #14 获得所有用户的所有模型
+    path('getAllModels',views.getAllModels),
+    #15 删除模型
+    path('deleteModelById',views.deleteModelById),
+    #16 中止模型训练
+    path('stopTrainById', views.stopTrainById),
+    #17 获得所有的用户
+    path('getAllUsers',views.getAllUsers),
+    #18 封禁用户
+    path('sealUser', views.sealUser),
+    #19 解封用户
+    path('unSealUser', views.unSealUser),
+    #20 获取用户数据集
+    path('getAllUserDatasets',views.getAllUserDatasets),
+    #21 删除用户数据集
+    path('deleteUserDataset',views.deleteUserDataset),
+    #22 获得要标注的数据集信息
+    path('getDatasetImageList',views.getDatasetImageList),
 
     #用户
     #1 获取特定类型的所有标准模型
@@ -103,4 +127,23 @@ urlpatterns = [
     path("getLossData", views.getLossData),
     #21删除模型
     path('deleteModel',views.deleteModel),
+    #22修改模型的发布状态
+    path('changeModelPublish',views.changeModelPublish),
+    #23 调用发布的模型服务
+    path("publishModel",views.publishModel),
+    #24 获得所有的公开数据集
+    path('getAllPublicDataset',views.getAllPublicDataset),
+    #25 关联公共数据集
+    path('linkPublicDataset',views.linkPublicDataset),
+    #26 录入标注(目标检测:coco)
+    path('entryAnn', views.entryAnn),
+
+    #26 登录
+    path('login',views.login),
+    #27 验证token
+    path('verifyToken',views.verifyToken),
+    #28 注册
+    path('sign',views.sign),
+    #29 对比验证码
+    path('compareYzm',views.compareYzm)
 ]
