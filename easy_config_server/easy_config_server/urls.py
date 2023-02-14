@@ -125,8 +125,6 @@ urlpatterns = [
     path("importDataFromUrl",views.importDataFromUrl),
     #20 获取所有模型的loss
     path("getLossData", views.getLossData),
-    #删除模型
-    path('deleteModel',views.deleteModel),
     #文本去重
     path('textDuplicate',views.textDuplicate),
     #21删除模型
