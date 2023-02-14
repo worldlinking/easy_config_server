@@ -7,12 +7,6 @@ import datetime
 from django.http import JsonResponse
 
 
-class TaskModelForm(forms.ModelForm):
-    class Meta:
-        model = models.Tasks
-        fields = ["taskName", "siteName", "keyword"]
-
-
 def taskJobList(request):
     result = {
         "code": 200,
@@ -20,19 +14,42 @@ def taskJobList(request):
         "data": []
     }
     try:
-        user_id = request.GET.get('user_id')
-        queryset = models.Tasks.objects.filter(user_id=user_id)
-        get_url = 'http://localhost:6800/listjobs.json?project=weibo'
-        get_response = requests.get(get_url)
-        get_json = get_response.json()
-        running = get_json['running']
-        finished = get_json['finished']
+        # user_id = request.GET.get('user_id')
+        queryset = models.Tasks.objects.filter()
+        project_url = 'http://localhost:6800/listprojects.json'
+        project_response = requests.get(project_url)
+        project_json = project_response.json()
+        projects = project_json['projects']
+        projects.remove('pg_weather')
+        projects.remove('pg_weibo')
+        running = []
+        finished = []
+        for project in projects:
+            get_url = 'http://localhost:6800/listjobs.json?project=' + project
+            print(get_url)
+            get_response = requests.get(get_url)
+            get_json = get_response.json()
+            running += get_json['running']
+            finished += get_json['finished']
         for obj in queryset:
+            print('000000')
             jobid = obj.jobid
+            siteName = obj.siteName
             flag = False
+            # 获取爬取数量
+            nid = obj.id
+            if siteName == '微博':
+                items = models.weibo.objects.filter(task_id=nid)
+                dataNum = len(items)
+                obj.dataNum = dataNum
+            elif siteName == 'weather':
+                items = models.weather.objects.filter(task_id=nid)
+                dataNum = len(items)
+                obj.dataNum = dataNum
             if len(jobid) != 0:
                 for runTask in running:
                     if runTask["id"] == jobid:
+                        print('111111')
                         obj.startTime = runTask["start_time"]
                         # now_ms = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
                         now_ms = datetime.datetime.now()
@@ -45,6 +62,7 @@ def taskJobList(request):
                 if flag:
                     continue
                 for finishTask in finished:
+                    print('222222')
                     if finishTask["id"] == jobid:
                         obj.startTime = finishTask["start_time"]
                         obj.status = 'finished'
@@ -55,10 +73,11 @@ def taskJobList(request):
                         obj.runtime = str(runtime)
                         obj.save()
                         break
+
         for obj in queryset:
             data = {'id': obj.id, 'taskName': obj.taskName, 'siteName': obj.siteName, 'keyword': obj.keyword,
                     'status': obj.status,
-                    'statTime': obj.startTime, 'runtime': obj.runtime, 'endTime': obj.endTime}
+                    'statTime': obj.startTime, 'runtime': obj.runtime, 'endTime': obj.endTime, 'dataNum': obj.dataNum}
             result["data"].append(data)
         return JsonResponse(result, safe=False, content_type='application/json')
     except Exception as e:
@@ -82,13 +101,20 @@ def spiderRequest(request):
             startdate = post.get('startdate')
             enddate = post.get('enddate')
             user_id = post.get('user_id')
+            province = post.get('province')
+            city = post.get('city')
+            if siteName == 'weather':
+                keyword = province + city
             row_object = models.Tasks.objects.create(taskName=taskName, siteName=siteName, keyword=keyword,
                                                      user_id=user_id)
             task_id = row_object.id
             post_url = 'http://127.0.0.1:6800/schedule.json'
-            # if siteName == '微博':
-            data = {'project': 'weibo', 'spider': 'search', 'key': keyword, 'task_id': task_id, 'startdate': startdate,
-                    'enddate': enddate}
+            if siteName == '微博':
+                data = {'project': 'weibo', 'spider': 'search', 'key': keyword, 'task_id': task_id,
+                        'startdate': startdate,
+                        'enddate': enddate}
+            elif siteName == 'weather':
+                data = {'project': 'weather', 'spider': 'nmc', 'province': province, 'city': city,'task_id': task_id,}
             post_response = requests.post(url=post_url, data=data)
             res_json = post_response.json()
             jobid = res_json['jobid']
@@ -120,9 +146,9 @@ def itemList(request):
             queryset = models.weibo.objects.filter(task_id=nid)
             fields = models.weibo._meta.get_fields()
             fields = fields[:10]
-        else:
-            queryset = models.wyNews.objects.filter(task_id=nid)
-            fields = models.wyNews._meta.get_fields()
+        elif row_object.siteName == 'weather':
+            queryset = models.weather.objects.filter(task_id=nid)
+            fields = models.weather._meta.get_fields()
         fieldName = []
         for field in fields:
             header = {}

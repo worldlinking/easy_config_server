@@ -48,7 +48,40 @@ urlpatterns = [
     path("useStandModelWeightZip", views.useStandModelWeightZip),
     #5 上传标准数据类型
     path('uploadNewStandDataset',views.uploadNewStandDataset),
-
+    #6获得所有模型名称
+    path('getAllModelName',views.getAllModelName),
+    #7 获得标准模型列表
+    path('getAllStandModelById',views.getAllStandModelById),
+    #8 获得某个标准模型的所有管理员权重信息
+    path('getStandModelWeightById', views.getStandModelWeightById),
+    #9 删除某一个标准模型权重
+    path('deleteStandModelWeightById', views.deleteStandModelWeightById),
+    #10更新标准模型信息
+    path('updateStandModel',views.updateStandModel),
+    #11 删除标准模型
+    path('deleteStandModel',views.deleteStandModel),
+    #12 获得所有的标准数据集
+    path('getAllStandDataSet',views.getAllStandDataSet),
+    #13 上传公开数据集
+    path('uploadPublicDataset', views.uploadPublicDataset),
+    #14 获得所有用户的所有模型
+    path('getAllModels',views.getAllModels),
+    #15 删除模型
+    path('deleteModelById',views.deleteModelById),
+    #16 中止模型训练
+    path('stopTrainById', views.stopTrainById),
+    #17 获得所有的用户
+    path('getAllUsers',views.getAllUsers),
+    #18 封禁用户
+    path('sealUser', views.sealUser),
+    #19 解封用户
+    path('unSealUser', views.unSealUser),
+    #20 获取用户数据集
+    path('getAllUserDatasets',views.getAllUserDatasets),
+    #21 删除用户数据集
+    path('deleteUserDataset',views.deleteUserDataset),
+    #22 获得要标注的数据集信息
+    path('getDatasetImageList',views.getDatasetImageList),
 
     #用户
     #1 获取特定类型的所有标准模型
@@ -93,5 +126,28 @@ urlpatterns = [
     #20 获取所有模型的loss
     path("getLossData", views.getLossData),
     #删除模型
-    path('deleteModel',views.deleteModel)
+    path('deleteModel',views.deleteModel),
+    #文本去重
+    path('textDuplicate',views.textDuplicate),
+    #21删除模型
+    path('deleteModel',views.deleteModel),
+    #22修改模型的发布状态
+    path('changeModelPublish',views.changeModelPublish),
+    #23 调用发布的模型服务
+    path("publishModel",views.publishModel),
+    #24 获得所有的公开数据集
+    path('getAllPublicDataset',views.getAllPublicDataset),
+    #25 关联公共数据集
+    path('linkPublicDataset',views.linkPublicDataset),
+    #26 录入标注(目标检测:coco)
+    path('entryAnn', views.entryAnn),
+
+    #26 登录
+    path('login',views.login),
+    #27 验证token
+    path('verifyToken',views.verifyToken),
+    #28 注册
+    path('sign',views.sign),
+    #29 对比验证码
+    path('compareYzm',views.compareYzm)
 ]

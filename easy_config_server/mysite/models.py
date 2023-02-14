@@ -6,6 +6,9 @@ class User(models.Model):
     pwd = models.CharField(max_length=255)
     email = models.CharField(max_length=255)
     type = models.SmallIntegerField() #用户类型,0为管理员,1为普通用户
+    activate = models.SmallIntegerField(null=True,blank=True) #账户状态，0为未激活，1为激活
+    yzm = models.CharField(null=True,blank=True,max_length=64) #账户验证码
+    isseal = models.SmallIntegerField(null=True,blank=True,default=0) #账户状态，0为未封禁，1为已封禁
     class Meta:
         db_table = "user"
 
@@ -63,9 +66,14 @@ class Model(models.Model):
     limit = models.SmallIntegerField(null=True,blank=True)#权限,0:公有,1:私有
     params = models.CharField(max_length=2000,null=True,blank=True)#训练参数
     train_time = models.CharField(max_length=100,null=True,blank=True)#存储模型开始训练的时间
+    publish = models.SmallIntegerField(null=True,blank=True)#0：未发布，1：已发布
+    publish_weight = models.CharField(max_length=255,null=True,blank=True)
     #设置外键
     user = models.ForeignKey(User,on_delete=models.CASCADE)
     dataSet = models.ForeignKey(DataSet,on_delete=models.CASCADE,null=True,blank=True)
     standModel = models.ForeignKey(StandModel,on_delete=models.CASCADE)
     class Meta:
         db_table = "model"
+
+
+

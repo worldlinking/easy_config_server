@@ -8,7 +8,7 @@ def getTotalAndLabelNum(data_type,type,dataset_path):
     :return:样本数目和对应的标准数目
     """
     if data_type=='coco':
-        if(type==0 or type==3):
+        if(type==0):
             total_num = len(os.listdir(dataset_path + "/images/train2017"))
             label_num = len(os.listdir(dataset_path + "/labels/train2017"))
             return total_num,label_num

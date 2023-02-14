@@ -4,12 +4,15 @@ import cv2
 from django.shortcuts import render, HttpResponse
 from django.http import JsonResponse
 from mysite.models import User, DataSet, Model, StandModel, StandModelWeight, StandDataset
+from spider.models import Tasks, weibo
 import os
 import torch
 from importlib import import_module
 from mysite.config import type_path_map
+from mysite.config import modelsName
 from mysite.utils.writeFile import writeFile
 from mysite.utils.isMeetStru import isMeetStru
+from mysite.utils.sim_simhash import getDuplicate
 from mysite.utils.getTotalAndLabelNum import getTotalAndLabelNum
 from mysite.utils.killProcTree import killProcTree
 import zipfile
@@ -24,6 +27,15 @@ import time
 from django.db.models import Q
 import urllib
 import requests
+from mysite.config import file_ip
+from mysite.utils.getYZM import getYZM
+from datetime import datetime,timedelta
+from mysite.config import SECRET_KEY
+from jose import jwt
+from jose.exceptions import ExpiredSignatureError, JWTError
+from django.core.mail import send_mail
+from mysite.utils.getImageList import getImageList
+from mysite.utils.entryAnns import entryAnns
 
 
 
@@ -437,9 +449,163 @@ def importData(req):
                 total_num,label_num = getTotalAndLabelNum(data_type,type,dataset_path=user_dataset_path + "/" + name)
                 DataSet.objects.filter(id=dataset_id).update(size=size,path=path,total_num=total_num,label_num=label_num)
                 return JsonResponse(reslut, safe=False, content_type='application/json')
+            if formatType == 'url':
+                pass
+            if formatType == 'spiderJob':
+                post = req.POST
+                user_id = post.get("user_id")
+                dataset_id = post.get("dataset_id")
+                task_id = post.get("dataset")
+                deleteDuplicate = post.get("deleteDuplicate")  # 1为不去重，0为去重
+                # 获取对应的数据集信息
+                name = DataSet.objects.filter(id=dataset_id).first().name
+                standDataset_id = DataSet.objects.filter(id=dataset_id).first().standDataset_id
+                type = DataSet.objects.filter(id=dataset_id).first().type
+                data_type = StandDataset.objects.filter(id=standDataset_id).first().data_type
+                items = weibo.objects.filter(task_id=task_id).values('text')
+
+                # 保持数据
+                user_dataset_path = 'mysite/datasets/user' + user_id
+                if not os.path.exists(user_dataset_path):
+                    os.mkdir(user_dataset_path)
+                if os.path.exists(user_dataset_path + "/" + name):  # 已经导入过
+                    shutil.rmtree(user_dataset_path + "/" + name)
+                filepath = user_dataset_path + '/' + name + '.txt'
+
+                if deleteDuplicate == '0':
+                    data = [item["text"] for item in items]
+                    total_num = getDuplicate(data, filepath, '0')
+                else:
+                    total_num = Tasks.objects.filter(id=task_id).first().dataNum
+                    f = open(filepath, 'w', encoding='utf-8')
+                    for item in items:
+                        f.write(item["text"] + '\n')
+                    f.close()
+
+                # 将信息写入数据库
+                size = os.path.getsize(filepath) / float(1024)
+                path = user_dataset_path + "/" + name
+                # total_num, label_num = getTotalAndLabelNum(data_type, type, dataset_path=user_dataset_path + "/" + name)
+                DataSet.objects.filter(id=dataset_id).update(size=size, path=path, total_num=total_num)
+                return JsonResponse(reslut, safe=False, content_type='application/json')
+
+            if formatType == 'text':
+                post = req.POST
+                user_id = post.get("user_id")
+                dataset_id = post.get("dataset_id")
+                task_id = post.get("dataset")
+                deleteDuplicate = post.get("deleteDuplicate")  # 2为不去重，0为中文去重，1为英文去重
+                # 获取对应的数据集信息
+                name = DataSet.objects.filter(id=dataset_id).first().name
+                standDataset_id = DataSet.objects.filter(id=dataset_id).first().standDataset_id
+                type = DataSet.objects.filter(id=dataset_id).first().type
+                data_type = StandDataset.objects.filter(id=standDataset_id).first().data_type
+                dataset = req.FILES.get("dataset", None)
+
+                # 保持数据
+                user_dataset_path = 'mysite/datasets/user' + user_id
+                if not os.path.exists(user_dataset_path):
+                    os.mkdir(user_dataset_path)
+                if os.path.exists(user_dataset_path + "/" + name):  # 已经导入过
+                    shutil.rmtree(user_dataset_path + "/" + name)
+                filepath = user_dataset_path + '/' + name + '.txt'
+
+                temp_path = user_dataset_path + '/' + 'temp.txt'
+                with open(temp_path, 'wb+') as f:
+                    for chunk in dataset.chunks():
+                        f.write(chunk)
+
+                with open(temp_path, 'r', encoding='utf-8') as f2:
+                    data = f2.readlines()
+
+                # 中文去重
+                if deleteDuplicate == '0':
+                    total_num = getDuplicate(data, filepath, '0')
+                # 英文去重
+                elif deleteDuplicate == '1':
+                    total_num = getDuplicate(data, filepath, '1')
+                else:
+                    writeFile(dataset, user_dataset_path, name + '.txt')
+                    total_num = len(data)
+
+                total_label = []
+                with open(filepath, 'r', encoding='utf-8') as f3:
+                    lines = f3.readlines()
+                for line in lines:
+                    rows = line.split('\t')
+                    if len(rows) >= 2:
+                        total_label.append(rows[0])
+
+                # 将信息写入数据库
+                size = os.path.getsize(filepath) / float(1024)
+                path = user_dataset_path + "/" + name
+                # total_num, label_num = getTotalAndLabelNum(data_type, type, dataset_path=user_dataset_path + "/" + name)
+                DataSet.objects.filter(id=dataset_id).update(size=size, path=path, total_num=total_num,
+                                                             label_num=len(total_label))
+                return JsonResponse(reslut, safe=False, content_type='application/json')
+
             reslut["code"] = 500
             reslut["info"] = 'formatType未知'
             return JsonResponse(reslut, safe=False, content_type='application/json')
+        except Exception as e:
+            print(e)
+            reslut["code"]=500
+            reslut["info"] = 'failed'
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+        finally:
+            if formatType == 'text':
+                if len(temp_path) != '0':
+                    os.remove(temp_path)
+
+def textDuplicate(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    if req.method=='POST':
+        try:
+                post = req.POST
+                user_id = post.get("user_id")
+                dataset_id = post.get("dataset_id")
+                # 获取对应的数据集信息
+                name = DataSet.objects.filter(id=dataset_id).first().name
+                standDataset_id = DataSet.objects.filter(id=dataset_id).first().standDataset_id
+                type = DataSet.objects.filter(id=dataset_id).first().type
+                data_type = StandDataset.objects.filter(id=standDataset_id).first().data_type
+
+                # 保持数据
+                user_dataset_path = 'mysite/datasets/user' + user_id
+
+                filepath = user_dataset_path + '/' + name + '.txt'
+
+                temp_path = user_dataset_path + '/' + 'temp.txt'
+
+                with open(filepath, 'r', encoding='utf-8') as f2:
+                    data = f2.readlines()
+
+                if os.path.exists(user_dataset_path + "/" + name):  # 已经导入过
+                    shutil.rmtree(user_dataset_path + "/" + name)
+                    print('已删除旧文件')
+
+                # 去重——通过langid库判断文本大多数的语种
+                total_num = getDuplicate(data, filepath)
+
+                total_label = []
+                with open(filepath, 'r', encoding='utf-8') as f3:
+                    lines = f3.readlines()
+                for line in lines:
+                    rows = line.split('\t')
+                    if len(rows) >= 2:
+                        total_label.append(rows[0])
+
+                # 将信息写入数据库
+                size = os.path.getsize(filepath) / float(1024)
+                path = user_dataset_path + "/" + name
+                # total_num, label_num = getTotalAndLabelNum(data_type, type, dataset_path=user_dataset_path + "/" + name)
+                DataSet.objects.filter(id=dataset_id).update(size=size, path=path, total_num=total_num,
+                                                             label_num=len(total_label))
+                return JsonResponse(reslut, safe=False, content_type='application/json')
         except Exception as e:
             print(e)
             reslut["code"]=500
@@ -708,7 +874,7 @@ def selectAllModel(req):
                 if train_time != otherStyleTime:
                     Model.objects.filter(id=model_id).update(status=2)
 
-        models = Model.objects.filter(user_id=user_id).values("id", "name", "status", "process", "weight", "limit", "params", "dataSet", "standModel", "standModel__params","standModel__name", "standModel__type","dataSet__id","dataSet__name")
+        models = Model.objects.filter(user_id=user_id).values("id", "name", "status", "process", "weight", "limit", "params", "dataSet", "standModel", "standModel__params","standModel__name", "standModel__type","dataSet__id","dataSet__name","publish","publish_weight")
         tempList = []
         for model in models:
             tempList.append(model)
@@ -1075,3 +1241,676 @@ def deleteModel(req):
         reslut["code"] = 500
         reslut["info"] = 'failed'
         return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getAllModelName(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        reslut['data'] = modelsName
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getAllStandModelById(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        admin_id = req.GET.get('admin_id')
+        sms = StandModel.objects.filter(user_id = admin_id).values("id","name","params","type","info","standDataset_id","standDataset__data_type")
+        tempList = []
+        for dataset in sms:
+            tempList.append(dataset)
+        reslut['data'] = tempList
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getStandModelWeightById(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        standmodel_id = req.GET.get('standmodel_id')
+        smsw = StandModelWeight.objects.filter(standModel__id = standmodel_id)
+        smsw = json.loads(serializers.serialize('json',smsw))
+        reslut['data'] = smsw
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+def deleteStandModelWeightById(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        weight_id = req.GET.get('weight_id')
+        weight_path = StandModelWeight.objects.filter(id=weight_id).first().weight_path
+        #删除权重
+        os.remove(weight_path)
+        StandModelWeight.objects.filter(id=weight_id).delete()
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def updateStandModel(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        body = req.body
+        body = json.loads(body)
+        id = body.get('id')
+        StandModel.objects.filter(id=id).update(**body)
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def deleteStandModel(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getAllStandDataSet(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        reslut['data'] = serializers.serialize('json',StandDataset.objects.all())
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def uploadPublicDataset(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        post = req.POST
+        name = post.get('name')
+        type = post.get('type')
+        model_type = post.get('model_type')
+        user_id = post.get("user_id")
+        standDataset_id = post.get("standDataset_id")
+        dataset = req.FILES.get("dataset", None)
+        user_dataset_path = 'mysite/datasets/user' + user_id
+        data_type = StandDataset.objects.filter(id=standDataset_id).first().data_type
+
+        if not os.path.exists(user_dataset_path):
+            os.mkdir(user_dataset_path)
+        if os.path.exists(user_dataset_path + "/" + name):  # 已经导入过
+            shutil.rmtree(user_dataset_path + "/" + name)
+        f = zipfile.ZipFile(dataset)
+        f.extractall(path=user_dataset_path + "/" + name)
+
+        isMeet = False
+        isMeet = isMeetStru(data_type, int(type), dataset_path=user_dataset_path + "/" + name)
+        if not isMeet:
+            shutil.rmtree(user_dataset_path + "/" + name)
+            reslut["code"] = 500
+            reslut["info"] = '文件不满足格式要求'
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+        total_num, label_num = getTotalAndLabelNum(data_type, int(type), dataset_path=user_dataset_path + "/" + name)
+        DataSet.objects.create(name=name,path=user_dataset_path + "/" + name,size=dataset.size/1024,limit=0,user_id=user_id,standDataset_id=standDataset_id,type=type,model_type=model_type,total_num=total_num,label_num=label_num)
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def changeModelPublish(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        model_id = req.GET.get('model_id')
+        publish = req.GET.get('publish')
+        if publish == "0":
+            Model.objects.filter(id=model_id).update(publish=publish)
+
+        if publish == "1":
+            print(model_id, publish)
+
+            publish_weight = req.GET.get('publish_weight')
+            Model.objects.filter(id=model_id).update(publish=publish,publish_weight=publish_weight)
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def publishModel(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        post = req.POST
+        model_id = req.GET.get("id")
+        model = Model.objects.filter(id=model_id).first()
+
+        user_id = model.user_id
+
+        # 判断模型的发布状态
+        publish = model.publish
+        if publish == 0:
+            reslut["code"] = 500
+            reslut["info"] = '该模型还未发布或未训练完成！'
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+        # 调用模型进行预测返回预测结果
+        predict_file = req.FILES.get("predict_file", None)
+        print(predict_file)
+        weight_name = model.publish_weight
+
+        # 将用户上传图片保存成文件
+        path = 'mysite/Temp/user' + str(user_id)
+        writeFile(predict_file, path, predict_file.name)
+
+        # 获取预测权重的地址和网络结构的地址
+        weight_path = model.weight + '/' + weight_name
+        net_path = model.standModel.net_path
+
+        dataset = DataSet.objects.filter(id=model.dataSet_id).first().standDataset.data_type
+        # 运行系统命令将预测结果保存成文件
+        # 判断是否有用户预测文件夹,如果没有则创建
+        user_path = "mysite/server_predict/user" + str(user_id)
+        if not os.path.exists(user_path):
+            os.makedirs(user_path)
+        os.system("python {}/predict.py --input {} --ckpt {} --save_val_results_to {} --dataset {}".
+                  format(net_path, path + "/" + predict_file.name, weight_path, user_path, dataset))
+        reslut['data'] = file_ip+"/"+"user" + str(user_id) + "/" + os.path.splitext(predict_file.name)[0]  # 返回预测结果文件路径
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+def getAllPublicDataset(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        user_id = req.GET.get('user_id')
+        model_type = req.GET.get('model_type')
+        datasets = DataSet.objects.filter(~Q(user_id=user_id) & Q(limit=0) & Q(model_type=model_type)).values("id","name","size","user_id","user__account","standDataset__data_type","type","model_type")
+        tempList = []
+        for dataset in datasets:
+            tempList.append(dataset)
+        reslut['data'] = tempList
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def linkPublicDataset(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        link_id = req.GET.get('link_id')
+        dataset_id = req.GET.get('dataset_id')
+
+        link_dataset = DataSet.objects.filter(id=link_id).first()
+        my_dataset = DataSet.objects.filter(id=dataset_id).first()
+        #复制数据
+        source_path = link_dataset.path
+        user_path = 'mysite/datasets/user'+str(my_dataset.user_id)
+        if not os.path.exists(user_path):
+            os.mkdir(user_path)
+        target_path = user_path + "/" + my_dataset.name
+        if os.path.exists(target_path):
+            shutil.rmtree(target_path)
+        shutil.copytree(source_path, target_path)
+
+        #更新数据库
+        DataSet.objects.filter(id=dataset_id).update(size=link_dataset.size,label_num=link_dataset.label_num,total_num=link_dataset.total_num)
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def login(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        json_str = req.body
+        req_data = json.loads(json_str)
+        account = req_data['account']
+        pwd = req_data['pwd']
+
+        #从数据库中获取用户信息
+        user = User.objects.filter(account=account,pwd=pwd).first()
+
+        isseal = user.isseal
+        if isseal == 1:
+            reslut["code"] = 500
+            reslut["info"] = 'failed'
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+        activate = user.activate
+        if activate == 0:
+            reslut["code"] = 500
+            reslut["info"] = 'failed'
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+        type = user.type
+        id = user.id
+
+        second = 1440*60*10 #十天过期时间
+        expire = datetime.utcnow() + timedelta(seconds=second)
+        to_encode = {"exp": expire, "sub": SECRET_KEY, "uid": id,"account":account,"type":type}
+        jwt_token = jwt.encode(claims=to_encode, key=SECRET_KEY)
+        type = "user" if type == 1 else "admin"
+        reslut['data'] = {'token':jwt_token,'type':type}
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+
+def verifyToken(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        json_str = req.body
+        req_data = json.loads(json_str)
+        token = req_data['token']
+        payload = jwt.decode(token, SECRET_KEY)
+        type = "user" if payload['type'] == 1 else "admin"
+        reslut['data'] = {"uid":payload['uid'],'account':payload['account'],'type':type}
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except ExpiredSignatureError as e:
+        print('token过期了！')
+        reslut["code"] = 500
+        reslut["info"] = 'token过期了'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except JWTError as e:
+        print('token验证失败！')
+        reslut["code"] = 500
+        reslut["info"] = 'token验证失败'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def sign(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        json_str = req.body
+        req_data = json.loads(json_str)
+
+        account = req_data['account']
+        pwd = req_data['pwd']
+        email = req_data['email']
+
+        #判断是否账户重复
+        if len(User.objects.filter(account=account)) != 0:
+            reslut["code"] = 500
+            reslut["info"] = '账号重复，请换一个账号'
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+        yzm = getYZM()
+        EMAIL_FROM = "2449471714@qq.com"
+        email_title = '邮箱激活'
+        email_body = "您的邮箱注册验证码为：{0}, 该验证码有效时间为两分钟，请及时进行验证。".format(yzm)
+        send_status = send_mail(email_title, email_body, EMAIL_FROM, [email])
+        yzm_delay = (datetime.now()+timedelta(minutes=3)).strftime("%Y-%m-%d %H:%M:%S")
+        if send_status==1:
+            User.objects.create(account=account,pwd=pwd,type=1,activate=0,email=email,yzm=yzm+';'+yzm_delay)
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+        else:
+            reslut["code"] = 500
+            reslut["info"] = '邮箱不可用'
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def compareYzm(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        json_str = req.body
+        req_data = json.loads(json_str)
+
+        user_yzm = req_data['yzm']
+        account = req_data['account']
+        user = User.objects.filter(account=account).first()
+
+        yzm = user.yzm
+        unuse_time = datetime.strptime(yzm.split(';')[1],"%Y-%m-%d %H:%M:%S")
+        now = datetime.now()
+        if now > unuse_time:
+            reslut["code"] = 499
+            reslut["info"] = '验证码已过期，请重新注册'
+            User.objects.filter(account=account).delete()
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+        yzm = yzm.split(';')[0]
+        if user_yzm == yzm:
+            User.objects.filter(account=account).update(activate=1,yzm="")
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+        else:
+            reslut["code"] = 498
+            reslut["info"] = '验证码不正确'
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getAllModels(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        models = Model.objects.all().values('id','name','user__account','standModel__type','status','dataSet__name','standModel__name')
+        tempList = []
+        for model in models:
+            tempList.append(model)
+        reslut['data'] = tempList
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def deleteModelById(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        model_id = req.GET.get('model_id')
+        model = Model.objects.filter(id=model_id).first()
+        user_id = model.user_id
+        pid = model.process
+        # 判断模型的状态
+        if model.status == 1:  # 模型正在训练，需要先终止训练
+            # 判断进程是否存在
+            if psutil.pid_exists(pid):
+                # 杀死进程树
+                try:
+                    killProcTree(pid)
+                finally:
+                    # 删除模型的文件
+                    weight_path = "mysite/modelWeights/user" + str(user_id) + "/" + model.name
+                    log_path = "mysite/modelLogs/user" + str(user_id) + "/" + model.name
+                    if os.path.exists(weight_path):
+                        shutil.rmtree(weight_path)
+                    if os.path.exists(log_path):
+                        shutil.rmtree(log_path)
+                    # 从数据库中移除改项
+                    model.delete()
+                    return JsonResponse(reslut, safe=False, content_type='application/json')
+        # 删除模型的文件
+        weight_path = "mysite/modelWeights/user" + str(user_id) + "/" + model.name
+        log_path = "mysite/modelLogs/user" + str(user_id) + "/" + model.name
+        if os.path.exists(weight_path):
+            shutil.rmtree(weight_path)
+        if os.path.exists(log_path):
+            shutil.rmtree(log_path)
+        # 从数据库中移除改项
+        model.delete()
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def stopTrainById(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        model_id = req.GET.get('model_id')
+        # 获取pid
+        model = Model.objects.filter(id=model_id).first()
+        pid = model.process
+
+        # 判断进程是否存在
+        if not psutil.pid_exists(pid):
+            reslut["code"] = 500
+            reslut["info"] = '已训练完成'
+            Model.objects.filter(id=model_id).update(status=2)
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+
+        # 杀死进程树
+        try:
+            killProcTree(pid)
+        finally:
+            Model.objects.filter(id=model_id).update(status=3)  # 修改为训练终止状态
+            return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getAllUsers(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        users = User.objects.filter(type=1)
+        users = serializers.serialize('json',users)
+        users = json.loads(users)
+        tempList = []
+        for user in users:
+            user['fields']['id'] = user['pk']
+            tempList.append(user['fields'])
+        reslut['data'] = tempList
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def sealUser(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        id = req.GET.get("id")
+        User.objects.filter(id=id).update(isseal=1)
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def unSealUser(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        id = req.GET.get("id")
+        User.objects.filter(id=id).update(isseal=0)
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getAllUserDatasets(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        datasets = DataSet.objects.filter(user__type=1)
+        datasets = serializers.serialize('json',datasets)
+        datasets = json.loads(datasets)
+        tempList = []
+        for dataset in datasets:
+            dataset['fields']['id'] = dataset['pk']
+            tempList.append(dataset['fields'])
+        reslut['data'] = tempList
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def deleteUserDataset(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        id = req.GET.get('id')
+        #获取用户数据存储地址
+        user_dataset = DataSet.objects.filter(id=id)
+        dataset = user_dataset.first()
+        path = dataset.path
+        if path:
+            #删除数据文件
+            shutil.rmtree(path)
+        user_dataset.delete()
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def getDatasetImageList(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+        id = req.GET.get('id')
+        dataset = DataSet.objects.filter(id=id).values('path','standDataset__data_type')[0]
+        path = dataset['path']
+        standDataset = dataset['standDataset__data_type']
+        imageList = getImageList(path,standDataset)
+        reslut['data'] = imageList
+
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
+def entryAnn(req):
+    reslut = {
+        "code": 200,
+        "info": "success",
+        "data": []
+    }
+    try:
+
+        data = json.loads(req.body)
+
+        id = data['id']
+        dataset = DataSet.objects.filter(id=id).values('path','standDataset__data_type').first()
+        entryAnns(dataset['path'],data['folder'],data['imgName'],data['imgSize'],dataset['standDataset__data_type'],data['Anns'])
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+    except Exception as e:
+        print(e)
+        reslut["code"] = 500
+        reslut["info"] = 'failed'
+        return JsonResponse(reslut, safe=False, content_type='application/json')
+
